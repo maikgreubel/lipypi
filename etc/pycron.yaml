@@ -5,12 +5,12 @@
   weeks: 0
   day: 0
   days: 0
-  hour: 0
+  hour: +
   hours: 0
   minute: 0
-  minutes: 5
+  minutes: 0
   second: 0
   seconds: 0
   program: ntpc
-  arguments:
+  arguments: -s
 

@@ -81,10 +81,17 @@ def addOne(conf):
 		fmt = ""
 		if conf['second'] > 0 and conf['second'] < 60:
 			fmt = ":{}".format(conf['second'])
+
 		if conf['minute'] > 0 and conf['minute'] < 60:
 			fmt = ":{}{}".format(conf['minute'], fmt)
-		if conf['hour'] > 0 and conf['hour'] < 24:
+
+		if conf['hour'] == '+':
+			log("Add {} every hour".format(conf['name']))
+			schedule.every().hour.do(job, conf['program'], conf['arguments'])
+			return
+		elif conf['hour'] > 0 and conf['hour'] < 24:
 			fmt = "{}{}".format(conf['hour'], fmt)
+	
 		if fmt != "":
 			log("Add {} every day at {}".format(conf['name'], fmt))
 			schedule.every().day.at(fmt).do(job, conf['program'], conf['arguments'])
@@ -130,6 +137,7 @@ def main(argv):
 		f = open(PID_FILE, "r")
 		pid = f.read()
 		f.close()
+		log("Attempt to stop process with pid {}....".format(pid))
 		os.kill(int(pid), signal.SIGKILL)
 		os.remove(PID_FILE)
 		return 0
