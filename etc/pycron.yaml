@@ -1,0 +1,16 @@
+---
+- name: NTP client update
+  description: The process will adjust the system clock to given date retrieved by ntpc.
+  week: 0
+  weeks: 0
+  day: 0
+  days: 0
+  hour: 0
+  hours: 0
+  minute: 0
+  minutes: 5
+  second: 0
+  seconds: 0
+  program: ntpc
+  arguments:
+

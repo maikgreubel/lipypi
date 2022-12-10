@@ -1,0 +1,149 @@
+#!/usr/bin/python
+
+import os
+# pip install schedule
+import schedule
+import signal
+import sys
+import syslog
+import time
+import traceback
+# pip install PyYAML
+import yaml
+from yaml.loader import SafeLoader
+
+#######################################################################################################
+#
+# Global variables
+#
+#######################################################################################################
+# The path to the file which persists the process id of our daemon
+PID_FILE = "/var/run/pycron.pid"
+# The path to configuration file
+CONFIG_FILE = "/etc/pycron.yaml"
+# The path to the daemon specific log file
+LOG = "/var/log/pycron.log"
+# Whether or not to use the syslog service
+USE_SYSLOG = False
+#######################################################################################################
+
+def log(line):
+	"""Logging functionality.
+	Logs either to daemon specific log file or use the syslog service.
+	The parameter line represents the log string to write to log.
+	"""
+	if USE_SYSLOG:
+		syslog.syslog(line)
+	else:
+		with open(LOG, "a") as f:
+			f.write("{}: {}{}".format(time.ctime(), line, os.linesep))
+
+#######################################################################################################
+def job(program, arguments):
+	"""Executes the given program with given arguments.
+	The execution output will be logged.
+	"""
+	s = os.popen("{} {}".format(program, arguments))
+	log(''.join(s.read().splitlines()))
+
+#######################################################################################################
+def addOne(conf):
+	"""Add one configuration as scheduler entry.
+	One configuration may contain a 
+	- name
+	- description
+	- program
+	- arguments
+	- weeks, days, hours, minutes or seconds entry, which represents the interval when the program
+	  has to be executed.
+	- hour, minute and/or second attribute which will be used as part to specify a format pattern
+	  when the job has to be executed.
+	"""
+	if(conf['weeks'] > 0):
+		schedule.every(conf['weeks']).weeks.do(job, conf['program'], conf['arguments'])
+		log("Add {} every {} weeks".format(conf['name'], conf['weeks']))
+	elif(conf['days'] > 0):
+		schedule.every(conf['days']).days.do(job, confi['program'], conf['arguments'])
+		log("Add {} every {} days".format(conf['name'], conf['days']))
+	elif(conf['hours'] > 0):
+		schedule.every(conf['hours']).hours.do(job, conf['program'], conf['arguments'])
+		log("Add {} every {} hours".format(conf['name'], conf['hours']))
+	elif(conf['minutes'] > 0):
+		schedule.every(conf['minutes']).minutes.do(job, conf['program'], conf['arguments'])
+		log("Add {} every {} minutes".format(conf['name'], conf['minutes']))
+	elif(conf['seconds'] > 0):
+		schedule.every(conf['seconds']).seconds.do(job, conf['program'], conf['arguments'])
+		log("Add {} every {} seconds".format(conf['name'], conf['seconds']))
+	else:
+		fmt = ""
+		if conf['second'] > 0 and conf['second'] < 60:
+			fmt = ":{}".format(conf['second'])
+		if conf['minute'] > 0 and conf['minute'] < 60:
+			fmt = ":{}{}".format(conf['minute'], fmt)
+		if conf['hour'] > 0 and conf['hour'] < 24:
+			fmt = "{}{}".format(conf['hour'], fmt)
+		if fmt != "":
+			log("Add {} every day at {}".format(conf['name'], fmt))
+			schedule.every().day.at(fmt).do(job, conf['program'], conf['arguments'])
+
+#######################################################################################################
+def startScheduler():
+	"""Start the scheduler process.
+	This is an endless loop and should never return.
+	"""
+	with open(CONFIG_FILE) as f:
+		confs = yaml.load(f, Loader=SafeLoader)
+		for conf in confs:
+			addOne(conf)
+
+	while True:
+		schedule.run_pending()
+		time.sleep(1)
+
+#######################################################################################################
+def main(argv):
+	""""The main entry function.
+	It is possible to give the following arguments:
+	-t   The running process will be terminated.
+	-s   Use the syslog instead of daemon specific log.
+	The main entry will fork a child process in order to start a daemon.
+	Process id of the child process will be written to pid file.
+	"""
+	global USE_SYSLOG
+	shutdown = False
+	for opt in argv[1:]:
+		if '-t' == opt:
+			shutdown = True
+		elif '-s' == opt:
+			USE_SYSLOG = True
+
+	if shutdown:
+		if not os.path.isfile(PID_FILE):
+			return 0
+
+		f = open(PID_FILE, "r")
+		pid = f.read()
+		f.close()
+		os.kill(int(pid), signal.SIGKILL)
+		os.remove(PID_FILE)
+		return 0
+
+	if os.path.isfile(PID_FILE):
+		raise Exception("Process id file exists, give up")
+		return -1
+
+	pid = os.fork()
+	if pid > 0:
+		f = open(PID_FILE, "w")
+		f.write("{}".format(pid))
+		f.close()
+	else:
+		try:
+			startScheduler()
+		except Exception as error:
+			log(str(os.linesep).join(traceback.format_exception(error)))
+			os.remove(PID_FILE)
+			raise error
+
+#######################################################################################################
+main(sys.argv)
