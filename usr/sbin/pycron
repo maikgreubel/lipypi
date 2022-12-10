@@ -25,6 +25,8 @@ CONFIG_FILE = "/etc/pycron.yaml"
 LOG = "/var/log/pycron.log"
 # Whether or not to use the syslog service
 USE_SYSLOG = False
+# Whether or not to use debug logging
+DEBUG_LOG = False
 #######################################################################################################
 
 def log(line):
@@ -44,7 +46,8 @@ def job(program, arguments):
 	The execution output will be logged.
 	"""
 	s = os.popen("{} {}".format(program, arguments))
-	log(''.join(s.read().splitlines()))
+	if DEBUG_LOG:
+		log(''.join(s.read().splitlines()))
 
 #######################################################################################################
 def addOne(conf):
@@ -110,12 +113,15 @@ def main(argv):
 	Process id of the child process will be written to pid file.
 	"""
 	global USE_SYSLOG
+	global DEBUG_LOG
 	shutdown = False
 	for opt in argv[1:]:
 		if '-t' == opt:
 			shutdown = True
 		elif '-s' == opt:
 			USE_SYSLOG = True
+		elif '-d' == opt:
+			DEBUG_LOG = True
 
 	if shutdown:
 		if not os.path.isfile(PID_FILE):
