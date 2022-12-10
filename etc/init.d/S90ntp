@@ -1,0 +1,25 @@
+#!/usr/bin/python
+
+import os
+import subprocess
+import sys
+
+def usage():
+	sys.stderr.writelines("Usage: {} [start]{}".format(sys.argv[0], os.linesep))
+
+if len(sys.argv) < 2:
+	usage()
+	sys.exit(0)
+
+match sys.argv[1]:
+	case "start":
+		try:
+			proc = subprocess.run(['/usr/bin/ntpc', '-q'])
+			if proc.returncode != 0:
+				raise Exception(proc.stderr)
+		except Exception as err:
+			sys.stderr.writelines("{}{}".format(str(err), os.linesep))
+			sys.exit(-1)
+
+	case _:
+		usage()

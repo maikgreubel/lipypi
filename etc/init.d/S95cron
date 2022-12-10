@@ -1,0 +1,63 @@
+#!/usr/bin/python
+#######################################################################################################
+# Imports
+#######################################################################################################
+import subprocess
+import sys
+import os
+
+#######################################################################################################
+def usage():
+	"""
+	Prints a usage text to stderr stream.
+	"""
+	sys.stderr.writelines("Usage: {} [start|stop|restart]{}".format(sys.argv[0], os.linesep))
+
+#######################################################################################################
+def start():
+	"""
+	Start the process to invoke pycron as service.
+	"""
+	try:
+		proc = subprocess.run(['/usr/sbin/pycron', '-s'])
+		if proc.returncode != 0:
+			raise Exception(proc.stderr)
+	except Exception as err:
+		sys.stderr.writelines("{}{}".format(str(err), os.linesep))
+		sys.exit(-1)
+
+#######################################################################################################
+def stop():
+	"""
+	Stop the process of pycron by calling with terminate flag.
+	"""
+	try:
+		proc = subprocess.run(['/usr/sbin/pycron', '-t'])
+		if proc.returncode != 0:
+			raise Exception(proc.stderr)
+	except Exception as err:
+		sys.stderr.writelines("{}{}".format(str(err), os.linesep))
+		sys.exit(-1)
+
+#######################################################################################################
+# The main process
+#
+if len(sys.argv) < 2:
+	usage()
+	sys.exit(0)
+
+
+match sys.argv[1]:
+	case 'start':
+		start()
+
+	case 'stop':
+		stop()
+
+	case 'restart':
+		stop()
+		start()
+
+	case _:
+		usage()
+
