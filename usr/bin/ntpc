@@ -1,13 +1,54 @@
 #!/usr/bin/python
-
+#
+#
+# This script provide means to retrieve a time entry from a remote ntp server and set the local time
+# and date to it.
+#
+#
+#######################################################################################################
+# Imports
+#######################################################################################################
 import ntplib
+import sys
+import syslog
 import time
 
-# Create a instance of ntp client
-ntp = ntplib.NTPClient()
-# Request the current timestamp
-res = ntp.request('europe.pool.ntp.org', version=3)
-# well well
-print("Setting system time to {:}".format(res.recv_time))
-# Set the system time using the retrieved time stamp
-time.clock_settime(time.CLOCK_REALTIME, res.recv_time)
+#######################################################################################################
+# Global variables
+#######################################################################################################
+NTP_SERVER_HOST = 'europe.pool.ntp.org'
+
+#######################################################################################################
+def main(argv):
+	"""
+	The main entry.
+	We accept the following arguments:
+	-s	use syslog instead of writing to stdout for normal messges and stderr for errors
+	-d	enable debug messages
+	"""
+	use_syslog = False
+	debug = False
+	for arg in argv[1:]:
+		if '-s' == arg:
+			use_syslog = True
+		if '-d' == arg:
+			debug = True
+
+	ntp = ntplib.NTPClient()
+	try:
+		res = ntp.request(NTP_SERVER_HOST, version=3)
+		if debug:
+			if use_syslog:
+				syslog.syslog("Setting system time to {:}".format(res.recv_time))
+			else:
+				print("Setting system time to {:}".format(res.recv_time))
+		time.clock_settime(time.CLOCK_REALTIME, res.recv_time)
+	except Exception as err:
+		if use_syslog:
+			syslog.syslog(str(err))
+		else:
+			sys.stderr.writelines(str(err))
+		sys.exit(-1)
+
+#######################################################################################################
+main(sys.argv)
