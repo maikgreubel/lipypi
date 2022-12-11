@@ -1,0 +1,120 @@
+#!/usr/bin/python
+#
+# This script provides a better readable interface for the display of loaded modules.
+#
+#######################################################################################################
+# Imports
+#######################################################################################################
+import subprocess
+
+from enum import Enum
+
+#######################################################################################################
+# Globals
+#######################################################################################################
+modtree = []
+
+#######################################################################################################
+class ModLState(Enum):
+	"""
+	Enumeration for module states.
+	"""
+	Nothing = 0
+	Live = 1
+	Loading = 2
+	Unloading = 3
+
+#######################################################################################################
+class Modinfo:
+	"""
+	A structure for one module information.
+	"""
+	start:int = 0
+	name:str = ""
+	size:int = 0
+	refs:int = 0
+	dependson = None
+	lstate:ModLState = ModLState.Nothing
+	memoffset:int = 0
+	descr:str = ""
+	file:str = ""
+
+	def __init__(self, name:str, size:int, refs:int, depends, state:ModLState, offset:int):
+		"""
+		Create a new instance of module information object.
+		"""
+		self.name = name
+		self.size = size
+		self.refs = int(refs)
+		self.dependson = depends
+		self.lstate = state
+		self.memoffset = offset
+		self._parseModInfo()
+		self._indent()
+		print(self)
+
+	def _parseModInfo(self):
+		"""
+		Parse additional data from the system command modinfo.
+		"""
+		proc = subprocess.run(['modinfo', self.name], text=True, capture_output=True)
+		if proc.returncode == 0:
+			for l in proc.stdout.splitlines():
+				if l.startswith('filename'):
+					self.file = l.replace('filename:', '').strip()
+				elif l.startswith('description'):
+					self.descr = l.replace('description:', '').strip()
+
+	def _indent(self):
+		"""
+		Provide a way to calculate the indentation size by dependency to other modules.
+		"""
+		if self.dependson == '-' or self.dependson == '[permanent],':
+			return
+		dependencies = self.dependson.split(',')
+		for dependency in dependencies:
+			dep = self.findModInTree(dependency)
+			if dep != None and (dep.start + 4) > self.start:
+				self.start = dep.start + 4
+
+	def findModInTree(self, name):
+		"""
+		Search for a module by given name in the global module tree.
+		"""
+		for mod in modtree:
+			if mod.name == name:
+				return mod
+		return None
+
+	def __str__(self):
+		"""
+		Provide the module information as one string.
+		"""
+		return "{}{} {}with size of {} bytes{}{}".format( (' ' * self.start),
+		self.name,
+		"({}) ".format(self.descr) if self.descr != "" else "",
+		self.size,
+		" used by {} processes".format(self.refs) if self.refs > 0 else "",
+		" depends on {}".format(self.dependson) if self.dependson != '-' and self.dependson != '[permanent],' else "")
+
+#######################################################################################################
+def parse(line:str):
+	"""
+	Parse one module line from /proc/modules.
+	"""
+	val = line.split()
+	return Modinfo(val[0], val[1], val[2], val[3], ModLState[val[4]], val[5])
+
+#######################################################################################################
+def main():
+	"""
+	Main entry point.
+	- Opens the /proc/modules file and read it line by line.
+	- Parse each line into a Modinfo object and append it to module tree.
+	- Iterates the module tree
+	"""
+	with open("/proc/modules", mode="r") as f:
+		for l in f.readlines():
+			modtree.append(parse(l))
+
+main()
