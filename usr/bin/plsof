@@ -1,0 +1,99 @@
+#!/usr/bin/python
+#
+# This script provides means to show open files by processes.
+# It colors the output depending on the open file type (can be supressed).
+#
+#######################################################################################################
+# Imports
+#######################################################################################################
+import getopt
+import os
+import re
+import stat
+import subprocess
+import sys
+import traceback
+
+#######################################################################################################
+# Globals
+#######################################################################################################
+BLACK = '\u001b[30m'
+RED = '\u001b[31m'
+GREEN = '\u001b[32m'
+YELLOW = '\u001b[33m'
+BLUE = '\u001b[34m'
+MAGENTA = '\u001b[35m'
+CYAN = '\u001b[36m'
+WHITE = '\u001b[37m'
+RESET = '\u001b[0m'
+
+#######################################################################################################
+def main(argv):
+	"""
+	The main entry function.
+	We accept the following arguments
+	-h[handle]	Search only for processes matching the opened file handle
+	-n[name]	Search only for processes matching the name
+	-p[pid]		Search only for processes matching the pid as process id
+	-u		Suppress the colored output
+	-d		Enable debugging
+	"""
+	filter = None
+	colored = True
+	if len(argv) > 1:
+		optlist,args = getopt.getopt(argv[1:], 'h:n:p:ud')
+		for o, a in optlist:
+			if o == '-p':
+				filter = '^'+a+'\W'
+			if o == '-n':
+				filter = '^[0-9]+\W+[a-zA-Z0-9\+\/\.]+' + a + '.*$'
+			if o == '-h':
+				filter = '^.*' + a + '$'
+			if o == '-u':
+				colored = False
+
+	proc = subprocess.run(['lsof'], capture_output=True, text=True)
+	if proc.returncode == 0:
+		for l in proc.stdout.splitlines():
+			m = re.match(r'' + filter, l) if filter != None else None
+			if filter == None or m != None:
+				deleted = False if re.match('.*\(deleted\)$', l) == None else True
+				l = l.replace('(deleted)', '').strip()
+				pid, proc, fileno, handle = l.split()
+				color = RESET
+				if deleted:
+					color = RED if colored else RESET
+				elif handle.startswith('socket'):
+					color = MAGENTA if colored else RESET
+				elif handle.startswith('anon_inode'):
+					color = BLUE if colored else RESET
+				elif handle.startswith('pipe'):
+					color = CYAN if colored else RESET
+				else:
+					stb = os.stat(handle)
+					if stat.S_ISCHR(stb.st_mode) or stat.S_ISBLK(stb.st_mode):
+						color = YELLOW if colored else RESET
+					if stat.S_ISFIFO(stb.st_mode):
+						color = CYAN if colored else RESET
+					if stat.S_ISREG(stb.st_mode):
+						if stb.st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+							color = GREEN if colored else RESET
+						else:
+							color = WHITE if colored else RESET
+
+				sys.stdout.writelines("{}{}{}\n".format(color, l, RESET))
+	else:
+		raise Exception(proc.stderr)
+	return 0
+
+#######################################################################################################
+debug = False
+for arg in sys.argv[1:]:
+	if arg == '-d':
+		debug = True
+try:
+	main(sys.argv)
+except Exception as err:
+	sys.stderr.writelines("{}\n".format(str(err)))
+	if debug:
+		sys.stderr.writelines(traceback.format_exc())
